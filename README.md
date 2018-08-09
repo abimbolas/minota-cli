@@ -1,2 +1,1 @@
-# minota-cli
-Command-line interface for Minotá
+# Command-line interface for Minotá
