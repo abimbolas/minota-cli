@@ -13,19 +13,49 @@ const load = require('./load');
 // Init
 cli
   .command('init')
-  .action(() => {
-    init().then(() => {
-      console.log(chalk.green('Minota initialized'));
-    });
+  .option('-t, --topic [topic]', 'Initialize with topic')
+  .action(({ topic }) => {
+    const inlineConfig = {};
+    const errors = [];
+    if (topic && topic !== true) {
+      inlineConfig.topic = topic;
+    }
+
+    if (topic === true) {
+      errors.push(chalk.yellow('Error: You should specify topic'));
+    } else {
+      init(inlineConfig).then(() => {
+        console.log(chalk.green('Minota initialized'));
+      });
+    }
+
+    if (errors.length) {
+      errors.forEach(error => console.log(error));
+    }
   });
 
 // Create
 cli
   .command('create')
-  .action(() => {
-    create().then((data) => {
-      console.log(chalk.green(`Note '${data.filename}' created`));
-    });
+  .option('-t, --topic [topic]', 'Create note with topic (title)')
+  .action(({ topic }) => {
+    // console.log(config.read().topic || '');
+    const inlineConfig = {
+      topic: (config.read().topic || ''),
+    };
+    const errors = [];
+    if (topic && topic !== true) {
+      inlineConfig.topic = `${inlineConfig.topic}${inlineConfig.topic ? ' / ' : ''}${topic}`;
+      // console.log(inlineConfig);
+    }
+    if (topic === true) {
+      errors.push(chalk.yellow('Error: You should specify topic'));
+    } else {
+      console.log('Config', inlineConfig);
+      create(inlineConfig).then((data) => {
+        console.log(chalk.green(`Note '${data.filename}' created`));
+      });
+    }
   });
 
 // Save
@@ -34,7 +64,7 @@ cli
   .option('-f, --file <file>', 'Specify file to save')
   .action(({ file }) => {
     if (file && file !== true) {
-      save({ file }, config.storage).then(() => {
+      save({ file }, config.read().storage).then(() => {
         console.log(chalk.green(`Note '${file}' saved`));
       });
     }
@@ -46,10 +76,10 @@ cli
 // Load
 cli
   .command('load')
-  .option('-l --last <last>')
+  .option('-l, --last [last]')
   .action(({ last }) => {
     if (last) {
-      load({ last }, config.storage).then(() => {
+      load({ last }, config.read().storage).then(() => {
         console.log(chalk.green('Notes loaded'));
       });
     }
