@@ -3,6 +3,7 @@
 /* eslint no-console: off */
 const cli = require('commander');
 const chalk = require('chalk');
+const fs = require('fs-extra-promise');
 const server = require('minota-server');
 const config = require('minota-shared/config');
 const init = require('./init');
@@ -63,8 +64,15 @@ cli
   .command('save')
   .option('-f, --file <file>', 'Specify file to save')
   .action(({ file }) => {
+    const userConfig = config.read();
     if (file && file !== true) {
-      save({ file }, config.read().storage).then(() => {
+      fs.statAsync(file).then((stats) => {
+        const notesConfig = {
+          date: stats.mtime,
+          topic: userConfig.topic,
+        };
+        return save({ file }, userConfig.storage, notesConfig);
+      }).then(() => {
         console.log(chalk.green(`Note '${file}' saved`));
       });
     }
