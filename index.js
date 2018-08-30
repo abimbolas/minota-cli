@@ -4,6 +4,7 @@
 const cli = require('commander');
 const chalk = require('chalk');
 const fs = require('fs-extra-promise');
+const path = require('path');
 const server = require('minota-server');
 const config = require('minota-shared/config');
 const init = require('./init');
@@ -16,21 +17,37 @@ cli
   .command('init')
   .option('-t, --topic [topic]', 'Initialize with topic')
   .action(({ topic }) => {
-    const inlineConfig = {};
-    const errors = [];
-    if (topic && topic !== true) {
-      inlineConfig.topic = topic;
+    // Abort if already initialized at ancestors
+    const ancestors = config.readAncestors().reverse();
+    console.log(ancestors);
+    if (ancestors.length) {
+      let configPath = path.resolve('.');
+      for (let i = 0; i < ancestors.length; i += 1) {
+        configPath = path.resolve(configPath, '..');
+      }
+      console.log(chalk.yellow(`Already initialized at ${configPath}`));
+      return;
     }
 
+    const errors = [];
+    const argsConfig = config.read();
+
+    // Config from arguments
+    if (topic && topic !== true) {
+      argsConfig.topic = topic;
+    }
+
+    // Errors
     if (topic === true) {
       errors.push(chalk.yellow('Error: You should specify topic'));
-    } else {
-      init(inlineConfig).then(() => {
-        console.log(chalk.green('Minota initialized'));
-      });
     }
 
-    if (errors.length) {
+    // Process
+    if (!errors.length) {
+      init(argsConfig).then(() => {
+        console.log(chalk.green('Minota initialized'));
+      });
+    } else {
       errors.forEach(error => console.log(error));
     }
   });
@@ -40,22 +57,24 @@ cli
   .command('create')
   .option('-t, --topic [topic]', 'Create note with topic (title)')
   .action(({ topic }) => {
-    // console.log(config.read().topic || '');
-    const inlineConfig = {
+    const errors = [];
+    const argsConfig = {
       topic: (config.read().topic || ''),
     };
-    const errors = [];
+
+    console.log(config.readPath());
+
     if (topic && topic !== true) {
-      inlineConfig.topic = `${inlineConfig.topic}${inlineConfig.topic ? ' / ' : ''}${topic}`;
-      // console.log(inlineConfig);
+      argsConfig.topic = `${argsConfig.topic}${argsConfig.topic ? ' / ' : ''}${topic}`;
     }
+
     if (topic === true) {
       errors.push(chalk.yellow('Error: You should specify topic'));
     } else {
-      console.log('Config', inlineConfig);
-      create(inlineConfig).then((data) => {
-        console.log(chalk.green(`Note '${data.filename}' created`));
-      });
+      // console.log('Config', argsConfig);
+      // create(argsConfig).then((data) => {
+      //   console.log(chalk.green(`Note '${data.filename}' created`));
+      // });
     }
   });
 

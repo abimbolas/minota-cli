@@ -1,9 +1,8 @@
 const fs = require('fs-extra-promise');
-const config = require('minota-shared/config');
+const defaultConfig = require('minota-shared/config').default;
 
-function init(userConfig = {}) {
-  const mergedConfig = Object.assign({}, config.read(), userConfig);
-  const json = JSON.stringify(mergedConfig, null, '  ');
+function init(config = defaultConfig) {
+  const json = JSON.stringify(config, null, '  ');
   return fs.outputFileAsync('./minota.json', json);
 }
 
