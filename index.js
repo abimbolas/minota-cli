@@ -16,17 +16,22 @@ const load = require('./load');
 cli
   .command('init')
   .option('-t, --topic [topic]', 'Initialize with topic')
-  .action(({ topic }) => {
+  .option('-f, --force', 'Force init inside already initialized folder')
+  .action(({ topic, force }) => {
     // Abort if already initialized at ancestors
+    // (need to force-init explicitly if we want init inside
+    // already initialized folder)
     const ancestors = config.readAncestors().reverse();
-    console.log(ancestors);
     if (ancestors.length) {
       let configPath = path.resolve('.');
       for (let i = 0; i < ancestors.length; i += 1) {
         configPath = path.resolve(configPath, '..');
       }
-      console.log(chalk.yellow(`Already initialized at ${configPath}`));
-      return;
+      if (!force) {
+        console.log(chalk.yellow(`Already initialized at ${configPath}, aborting`));
+        return;
+      }
+      console.log(chalk.yellow(`Forcing init here, though already initialized at ${configPath}`));
     }
 
     const errors = [];
@@ -58,23 +63,22 @@ cli
   .option('-t, --topic [topic]', 'Create note with topic (title)')
   .action(({ topic }) => {
     const errors = [];
-    const argsConfig = {
-      topic: (config.read().topic || ''),
+    const contextConfig = config.read();
+    const userConfig = {
+      topic: (contextConfig.topic || ''),
     };
 
-    console.log(config.readPath());
-
     if (topic && topic !== true) {
-      argsConfig.topic = `${argsConfig.topic}${argsConfig.topic ? ' / ' : ''}${topic}`;
+      userConfig.topic = `${userConfig.topic}${userConfig.topic ? ' / ' : ''}${topic}`;
     }
 
     if (topic === true) {
       errors.push(chalk.yellow('Error: You should specify topic'));
     } else {
-      // console.log('Config', argsConfig);
-      // create(argsConfig).then((data) => {
-      //   console.log(chalk.green(`Note '${data.filename}' created`));
-      // });
+      console.log('Config', userConfig);
+      create(userConfig, contextConfig).then((data) => {
+        console.log(chalk.green(`Note '${data.filename}' created`));
+      });
     }
   });
 
