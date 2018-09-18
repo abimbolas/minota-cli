@@ -4,6 +4,7 @@
 const cli = require('commander');
 const chalk = require('chalk');
 const fs = require('fs-extra-promise');
+const merge = require('merge');
 const path = require('path');
 const server = require('minota-server');
 const config = require('minota-shared/config');
@@ -35,11 +36,12 @@ cli
     }
 
     const errors = [];
-    const argsConfig = config.read();
+    const contextConfig = config.read();
+    const userConfig = {};
 
     // Config from arguments
     if (topic && topic !== true) {
-      argsConfig.topic = topic;
+      userConfig.topic = topic;
     }
 
     // Errors
@@ -49,7 +51,7 @@ cli
 
     // Process
     if (!errors.length) {
-      init(argsConfig).then(() => {
+      init(merge(contextConfig, userConfig)).then(() => {
         console.log(chalk.green('Minota initialized'));
       });
     } else {
