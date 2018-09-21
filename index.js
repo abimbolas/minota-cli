@@ -4,6 +4,7 @@
 const cli = require('commander');
 const chalk = require('chalk');
 const fs = require('fs-extra-promise');
+const glob = require('fast-glob');
 const merge = require('merge');
 const path = require('path');
 const server = require('minota-server');
@@ -22,7 +23,7 @@ cli
     // Abort if already initialized at ancestors
     // (need to force-init explicitly if we want init inside
     // already initialized folder)
-    const ancestors = config.readAncestors().reverse();
+    const ancestors = config.readAncestors();
     if (ancestors.length) {
       let configPath = path.resolve('.');
       for (let i = 0; i < ancestors.length; i += 1) {
@@ -66,21 +67,24 @@ cli
   .action(({ topic }) => {
     const errors = [];
     const contextConfig = config.read();
-    const userConfig = {
-      topic: (contextConfig.topic || ''),
-    };
+    const userConfig = {};
 
     if (topic && topic !== true) {
-      userConfig.topic = `${userConfig.topic}${userConfig.topic ? ' / ' : ''}${topic}`;
+      userConfig.topic = topic;
     }
 
+    // Errors
     if (topic === true) {
       errors.push(chalk.yellow('Error: You should specify topic'));
-    } else {
-      console.log('Config', userConfig);
+    }
+
+    // Process
+    if (!errors.length) {
       create(userConfig, contextConfig).then((data) => {
         console.log(chalk.green(`Note '${data.filename}' created`));
       });
+    } else {
+      errors.forEach(error => console.log(error));
     }
   });
 
@@ -88,22 +92,60 @@ cli
 cli
   .command('save')
   .option('-f, --file <file>', 'Specify file to save')
-  .action(({ file }) => {
-    const userConfig = config.read();
+  .option('-p, --pattern <pattern>', 'Specify files pattern to save\'em all')
+  .action(({ file, pattern }) => {
+    const errors = [];
+    const contextConfig = config.read();
+    // const userConfig = {};
+    let fileList = [];
+
     if (file && file !== true) {
-      fs.statAsync(file).then((stats) => {
-        const notesConfig = {
-          date: stats.mtime,
-          topic: userConfig.topic,
-        };
-        return save({ file }, userConfig.storage, notesConfig);
+      fileList.push(file);
+    } else if (file === true) {
+      errors.push(chalk.yellow('Error: You should specify filename'));
+    }
+
+    if (pattern && pattern !== true) {
+      fileList = fileList.concat(glob.sync([pattern]));
+    } else if (pattern === true) {
+      errors.push(chalk.yellow('Error: You should specify pattern'));
+    }
+
+    if (!file && !pattern) {
+      errors.push(chalk.yellow('Error: You should specify --file or files --pattern option to save something'));
+    }
+
+    // Process
+    if (!errors.length) {
+      // Add ancestors if any
+      const ancestors = config.readAncestors();
+      // fileList = fileList.map(item => (ancestors ? `${ancestors}/` : '') + item);
+      save({
+        fileList,
+        // userConfig,
+        contextConfig,
+        ancestors,
       }).then(() => {
-        console.log(chalk.green(`Note '${file}' saved`));
+        console.log(chalk.green('Notes saved'));
       });
+    } else {
+      errors.forEach(error => console.log(error));
     }
-    if (!file || file === true) {
-      console.log(chalk.yellow('You should specify filenames with \'--file\' option'));
-    }
+    // const userConfig = config.read();
+    // if (file && file !== true) {
+    //   fs.statAsync(file).then((stats) => {
+    //     const notesConfig = {
+    //       date: stats.mtime,
+    //       topic: userConfig.topic,
+    //     };
+    //     return save({ file }, userConfig.storage, notesConfig);
+    //   }).then(() => {
+    //     console.log(chalk.green(`Note '${file}' saved`));
+    //   });
+    // }
+    // if (!file || file === true) {
+    //   console.log(chalk.yellow('You should specify filenames with \'--file\' option'));
+    // }
   });
 
 // Load
@@ -125,7 +167,7 @@ cli
 cli
   .command('config')
   .action(() => {
-    console.log(chalk.green('config:', JSON.stringify(config, null, '  ')));
+    console.log(chalk.green('config:', JSON.stringify(config.read(), null, '  ')));
   });
 
 // Start server

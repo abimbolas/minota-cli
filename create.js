@@ -13,22 +13,11 @@ function createNote(userConfig = {}, contextConfig = {}) {
     content: '(Enter your text here)',
   };
   Object.assign(note.config, userConfig);
-  // Form tree path, remove context topic
-  let treePath;
-  if (note.config.topic) {
-    if (contextConfig.topic) {
-      const pathRegexp = new RegExp(`^${contextConfig.topic}`);
-      treePath = note.config.topic
-        .replace(pathRegexp, '')
-        .split(' / ')
-        .filter(t => t);
-    } else {
-      treePath = note.config.topic
-        .split(' / ')
-        .filter(t => t);
-    }
-  }
-  const filename = `${treePath.join('/')}.md`;
+  // Restore full topic
+  note.config.topic = [contextConfig.topic, userConfig.topic]
+    .filter(topic => topic)
+    .join(' / ');
+  const filename = `${userConfig.topic.split(' / ').join('/')}.md`;
   return fs
     .outputFileAsync(filename, md.stringify(note))
     .then(() => ({ note, filename }));
