@@ -3,7 +3,7 @@
 /* eslint no-console: off */
 const cli = require('commander');
 const chalk = require('chalk');
-const fs = require('fs-extra-promise');
+const inquirer = require('inquirer');
 const glob = require('fast-glob');
 const merge = require('merge');
 const path = require('path');
@@ -20,24 +20,24 @@ cli
   .option('-t, --topic [topic]', 'Initialize with topic')
   .option('-f, --force', 'Force init inside already initialized folder')
   .action(({ topic, force }) => {
-    // Abort if already initialized at ancestors
-    // (need to force-init explicitly if we want init inside
-    // already initialized folder)
-    const ancestors = config.readAncestors();
-    if (ancestors.length) {
-      let configPath = path.resolve('.');
-      for (let i = 0; i < ancestors.length; i += 1) {
-        configPath = path.resolve(configPath, '..');
-      }
+    // Abort if already initialized at current path or at parents.
+    // Force re-initialization if we were supplied with --force option
+    const searchResult = config.search();
+    const currentPath = path.resolve('.').replace(/\\/g, '/');
+    const isInitializedHere = currentPath.indexOf(searchResult.path) === 0;
+    if (searchResult.config && isInitializedHere) {
+      const where = searchResult.path === currentPath ? 'here' : `at ${searchResult.path}`;
       if (!force) {
-        console.log(chalk.yellow(`Already initialized at ${configPath}, aborting`));
+        console.log(chalk.yellow(`Already initialized ${where}, init aborted.`));
         return;
       }
-      console.log(chalk.yellow(`Forcing init here, though already initialized at ${configPath}`));
+      console.log(chalk.yellow(
+        `Forcing init here, though already initialized ${where}`,
+      ));
     }
 
     const errors = [];
-    const contextConfig = config.read();
+    const contextConfig = searchResult.config || config.default;
     const userConfig = {};
 
     // Config from arguments
@@ -64,13 +64,20 @@ cli
 cli
   .command('create')
   .option('-t, --topic [topic]', 'Create note with topic (title)')
-  .action(({ topic }) => {
+  .option('-i, --ignoreBreadcrumbs', 'Include path from config file as topic breadcrumbs')
+  .action(({ topic, ignoreBreadcrumbs } = {}) => {
     const errors = [];
-    const contextConfig = config.read();
-    const userConfig = {};
+    const searchResult = config.search();
+    const contextConfig = searchResult.config || config.default;
+    const userConfig = { topic: '' };
+    let parentTopic = '';
 
     if (topic && topic !== true) {
       userConfig.topic = topic;
+    }
+
+    if (!ignoreBreadcrumbs && searchResult.breadcrumbs) {
+      parentTopic = searchResult.breadcrumbs.split('/').join(' / ');
     }
 
     // Errors
@@ -80,8 +87,14 @@ cli
 
     // Process
     if (!errors.length) {
-      create(userConfig, contextConfig).then((data) => {
+      create({
+        contextConfig,
+        userConfig,
+        parentTopic,
+      }).then((data) => {
         console.log(chalk.green(`Note '${data.filename}' created`));
+      }).catch((error) => {
+        console.log(chalk.yellow(`${error.message}, creation aborted.`));
       });
     } else {
       errors.forEach(error => console.log(error));
@@ -95,8 +108,8 @@ cli
   .option('-p, --pattern <pattern>', 'Specify files pattern to save\'em all')
   .action(({ file, pattern }) => {
     const errors = [];
-    const contextConfig = config.read();
-    // const userConfig = {};
+    const searchResult = config.search();
+    const contextConfig = searchResult.config || config.default;
     let fileList = [];
 
     if (file && file !== true) {
@@ -106,7 +119,8 @@ cli
     }
 
     if (pattern && pattern !== true) {
-      fileList = fileList.concat(glob.sync([pattern]));
+      const patternList = pattern.split(/;|,/).map(item => item.trim());
+      fileList = fileList.concat(glob.sync(patternList));
     } else if (pattern === true) {
       errors.push(chalk.yellow('Error: You should specify pattern'));
     }
@@ -117,35 +131,28 @@ cli
 
     // Process
     if (!errors.length) {
-      // Add ancestors if any
-      const ancestors = config.readAncestors();
-      // fileList = fileList.map(item => (ancestors ? `${ancestors}/` : '') + item);
-      save({
-        fileList,
-        // userConfig,
-        contextConfig,
-        ancestors,
-      }).then(() => {
-        console.log(chalk.green('Notes saved'));
+      fileList.forEach(item => console.log(item));
+      inquirer.prompt([{
+        type: 'confirm',
+        name: 'saveFiles',
+        message: 'Do you want to save all these files?',
+        default: true,
+      }]).then((answers) => {
+        if (answers.saveFiles) {
+          save({
+            fileList,
+            contextConfig,
+            parentTopic: searchResult.breadcrumbs || '',
+          }).then(() => {
+            console.log(chalk.green('Notes saved.'));
+          });
+        } else {
+          console.log(chalk.green('Notes saving aborted.'));
+        }
       });
     } else {
       errors.forEach(error => console.log(error));
     }
-    // const userConfig = config.read();
-    // if (file && file !== true) {
-    //   fs.statAsync(file).then((stats) => {
-    //     const notesConfig = {
-    //       date: stats.mtime,
-    //       topic: userConfig.topic,
-    //     };
-    //     return save({ file }, userConfig.storage, notesConfig);
-    //   }).then(() => {
-    //     console.log(chalk.green(`Note '${file}' saved`));
-    //   });
-    // }
-    // if (!file || file === true) {
-    //   console.log(chalk.yellow('You should specify filenames with \'--file\' option'));
-    // }
   });
 
 // Load
