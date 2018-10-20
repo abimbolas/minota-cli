@@ -183,7 +183,7 @@ cli
   .option('-p, --port <port>', 'Specify port to listen')
   .action(({ port = 1234 }) => {
     if (port && port !== true) {
-      server.listen(port, () => {
+      server.init().listen(port, () => {
         console.log(`Server listening at 'http://localhost:${port}'`);
       });
     }
